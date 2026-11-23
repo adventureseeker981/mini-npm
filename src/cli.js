@@ -244,9 +244,9 @@ async function main(argv) {
         throw new Error(`unknown command "${cmd}". Run "mnpm help".`);
     }
   } catch (err) {
-    console.log(`mnpm error: ${err.message}`);
+    console.error(`mnpm error: ${err.message}`);
     if (process.env.MNPM_DEBUG) {
-      console.log(err.stack);
+      console.error(err.stack);
     }
     process.exitCode = 1;
   }
