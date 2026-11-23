@@ -1,0 +1,39 @@
+{
+  "name": "mnpm",
+  "version": "0.1.0",
+  "description": "A tiny npm clone: resolves and installs packages from the npm registry",
+  "keywords": [
+    "Package",
+    "Manager",
+    "CLI",
+    "Dependencies"
+  ],
+  "homepage": "https://github.com/adventureseeker981/mini-npm#readme",
+  "bugs": {
+    "url": "https://github.com/adventureseeker981/mini-npm/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adventureseeker981/mini-npm.git"
+  },
+  "license": "ISC",
+  "author": "adventureseeker981",
+  "type": "commonjs",
+  "main": "/bin/mnpm.js",
+  "bin": {
+    "mnpm": "bin/mnpm.js"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^5.3.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}
