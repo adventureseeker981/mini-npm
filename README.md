@@ -1,77 +1,344 @@
-# mnpm: a tiny npm clone
+# mnpm: Tiny npm Clone
 
-A package manager in ~600 lines of dependency-free Node.js. It reads `package.json`,
-resolves semver ranges against the real npm registry, downloads tarballs, verifies
-their hashes, and unpacks them into `node_modules`.
+mnpm is a lightweight Node.js package manager that demonstrates how npm-style dependency resolution works. It supports registry lookups, semver ranges, dependency hoisting, lockfiles, tarball integrity checks, and executable `.bin` links.
+
+It is dependency-free, requires Node.js 18 or newer, and contains roughly 600 lines of JavaScript.
+
+## Features
+
+- Initialize projects with `package.json`
+- Install and uninstall dependencies
+- Resolve semver ranges and npm dist-tags
+- Hoist compatible dependencies and nest conflicting versions
+- Generate `mnpm-lock.json`
+- Download and verify package tarballs
+- Safely extract packages into `node_modules`
+- Create executable links in `node_modules/.bin`
+- Run package scripts
+- Prune packages removed from `package.json`
+- Support optional dependencies and platform/CPU filtering
+
+## Installation
+
+Clone the repository:
 
 ```bash
+git clone https://github.com/adventureseeker981/mini-npm.git
+cd mini-npm
+```
+
+Run mnpm directly:
+
+```bash
+node bin/mnpm.js
+```
+
+Optionally make it available globally:
+
+```bash
+npm link
+```
+
+After linking, replace `node bin/mnpm.js` with `mnpm` in the examples below.
+
+## Quick Start
+
+```bash
+# Create package.json
 node bin/mnpm.js init
+
+# Install packages
 node bin/mnpm.js install express lodash@4
 node bin/mnpm.js install -D semver
+
+# Display dependencies
+node bin/mnpm.js ls
 node bin/mnpm.js ls --all
+
+# Run a package script
 node bin/mnpm.js run test
-npm link        # optional: makes the `mnpm` command available globally
 ```
 
-Run the tests with `npm test`.
+## Commands
 
-## How an install works
+### `init`
 
+Creates a basic `package.json` in the current directory.
+
+```bash
+mnpm init
 ```
-package.json ──► resolver ──► flat list of packages ──► installer ──► node_modules
-                    │                  │                    │
-              registry.js         mnpm-lock.json        tar.js (unpack)
-              semver.js           (saves the plan)      integrity check
+
+The file includes a default package name, version, main entry point, test script, and license.
+
+### `install`
+
+Installs all dependencies declared in `package.json`.
+
+```bash
+mnpm install
 ```
 
-| File | Job | Concept it teaches |
-|---|---|---|
-| `src/semver.js` | Does `1.4.2` satisfy `^1.2.0`? | `^` is just sugar for `>=1.2.0 <2.0.0` |
-| `src/registry.js` | Fetch package metadata and tarballs | The registry is a plain HTTP+JSON API |
-| `src/resolver.js` | Walk the dependency tree and choose where each copy lives | Hoisting and version conflicts |
-| `src/tar.js` | Unpack `.tgz` files by hand | tar = 512-byte headers + data; path-traversal safety |
-| `src/installer.js` | Download, verify, extract, prune, link bins | Integrity hashes, concurrency |
-| `src/lockfile.js` | Remember what was resolved | Reproducible installs |
-| `src/cli.js` | Commands | Gluing it together |
+To add one or more packages:
 
-## Suggested 3-hour plan (if you rebuild it yourself)
+```bash
+mnpm install express lodash@4
+mnpm install semver@~7.6
+```
 
-1. **0:00–0:25: Project and registry.** `npm init`, then fetch
-   `https://registry.npmjs.org/lodash` and look at the JSON by hand. Find `dist-tags`,
-   `versions`, and `versions[x].dist.tarball`.
-2. **0:25–1:00: Semver.** Start with exact versions plus `^` and `~`, then add the rest.
-   Write tests first, since the rules are full of edge cases (`^0.2.3`, prereleases).
-3. **1:00–1:40: Tarballs.** Download a tarball, `gunzip` it, and parse the headers yourself.
-   Strip the leading `package/` folder.
-4. **1:40–2:20: Resolver and installer.** Install one package, then its dependencies, then
-   handle conflicts by nesting.
-5. **2:20–2:45: CLI, lockfile, `.bin` links.**
-6. **2:45–3:00: Try it on `express`**, and write up what you learned.
+### Development dependencies
 
-## Design decisions worth discussing
+Use `-D` or `--save-dev` to add dependencies to `devDependencies`.
 
-- **Hoisting:** a dependency goes at the top level unless a conflicting version is
-  already reachable, in which case it is nested under the package that needs it. This
-  mirrors how Node's `require()` walks up through `node_modules` folders.
-- **`latest` is preferred:** if the `latest` dist-tag satisfies the range, npm picks it
-  even when a higher version exists. `pickVersion` mirrors this.
-- **Integrity:** every tarball is hashed and compared to the registry's `sha512` before
-  extraction. A mismatch aborts the install.
-- **Tar safety:** entries that would escape the package folder throw, and symlinks are
-  skipped. See `test/tar.test.js` for the "zip slip" test.
-- **No install scripts:** real npm runs `postinstall` scripts, which is a major
-  supply-chain risk. mnpm deliberately doesn't, so packages that need compiling won't work.
+```bash
+mnpm install -D typescript
+mnpm install --save-dev mocha
+```
 
-## Known limitations (good stretch goals)
+### `uninstall`
 
-- **Lockfile is all-or-nothing.** If `package.json` changes, everything is re-resolved
-  instead of keeping already-locked versions where possible.
-- **No peerDependencies.** They're ignored (npm 7+ installs them automatically).
-- **Registry specs only.** Git URLs, `file:`, `npm:` aliases and workspaces are rejected
-  with a clear error.
-- **No cache.** Add `~/.mnpm-cache` keyed by integrity hash so repeat installs work offline.
-- **Windows.** `.bin` symlinks are skipped if the OS refuses them (npm writes `.cmd` shims).
-- **No `mnpm publish`.** A fun next step: `npm pack` equivalent, then `PUT` to a local
-  [Verdaccio](https://verdaccio.org/) registry via `MNPM_REGISTRY`.
-- **Other ideas:** `mnpm outdated`, `mnpm audit`, a progress bar, `--production`, scoped
-  registry config via `.mnpmrc`.
+Removes one or more dependencies from `package.json`, then updates the installation.
+
+```bash
+mnpm uninstall lodash express
+```
+
+Aliases:
+
+```bash
+mnpm remove lodash
+mnpm rm lodash
+```
+
+### `ls`
+
+Lists the project's direct dependencies and whether they are currently installed.
+
+```bash
+mnpm ls
+```
+
+Use `--all` to show the complete dependency tree from the lockfile.
+
+```bash
+mnpm ls --all
+```
+
+### `run`
+
+Runs a script from `package.json`.
+
+```bash
+mnpm run test
+mnpm run build
+```
+
+Arguments are passed to the script:
+
+```bash
+mnpm run test --verbose
+```
+
+Shortcuts are available:
+
+```bash
+mnpm test
+mnpm start
+```
+
+### Help and version
+
+```bash
+mnpm help
+mnpm --help
+mnpm --version
+```
+
+## Registry Configuration
+
+mnpm uses the npm registry by default:
+
+```text
+https://registry.npmjs.org
+```
+
+Set `MNPM_REGISTRY` to use another compatible registry:
+
+```bash
+MNPM_REGISTRY=https://registry.example.com mnpm install express
+```
+
+Enable debug output for full stack traces:
+
+```bash
+MNPM_DEBUG=1 mnpm install express
+```
+
+## How It Works
+
+The installation flow is:
+
+```text
+package.json
+    │
+    ▼
+Dependency resolver
+    │
+    ▼
+Flat package plan
+    │
+    ▼
+Installer
+    │
+    ├── download tarballs
+    ├── verify integrity
+    ├── extract files
+    ├── prune old packages
+    └── create .bin links
+```
+
+### Registry Metadata
+
+mnpm queries the registry using the package metadata API. Registry metadata contains:
+
+- `dist-tags`, such as `latest`
+- Available versions
+- Tarball URLs
+- Integrity hashes
+- Package dependency declarations
+- Executable information
+
+### Semver Resolution
+
+mnpm supports common npm-style semver ranges:
+
+| Range | Meaning |
+|---|---|
+| `1.4.2` | Exact version |
+| `^1.2.0` | Compatible version within major 1 |
+| `~1.2.0` | Compatible patch range |
+| `>=1.2.0` | Minimum version |
+| `1.x` | Any 1.x version |
+| `latest` | Registry `latest` dist-tag |
+
+The `latest` dist-tag is preferred when it satisfies the requested range.
+
+### Dependency Hoisting
+
+mnpm uses a simplified npm-style hoisting strategy:
+
+- Reuse a compatible dependency already reachable from the requesting package.
+- Place a package at the top level if no conflicting copy exists.
+- Nest a conflicting version under the package that requires it.
+
+For example:
+
+```text
+node_modules/
+├── express/
+└── foo/
+    └── node_modules/
+        └── bar/
+```
+
+Nested placement mirrors Node.js module lookup, where `require()` searches the nearest `node_modules` directories before walking upward.
+
+### Lockfile
+
+Successful resolutions are stored in `mnpm-lock.json`.
+
+The lockfile makes subsequent installs reproducible and allows mnpm to use the saved package plan when the dependency declarations have not changed.
+
+When `package.json` changes, mnpm currently re-resolves the complete dependency tree.
+
+### Integrity and Tarball Safety
+
+Before extraction, mnpm verifies each tarball against the registry's `sha512` integrity value. A mismatch aborts the installation.
+
+Tar extraction is also protected against path traversal. Entries that could escape the package directory are rejected.
+
+Symlinks are skipped for safety.
+
+### Executable Links
+
+If a package declares a `bin` field, mnpm creates links in `node_modules/.bin`.
+
+These links are available to package scripts because mnpm prepends `node_modules/.bin` to `PATH` when running scripts.
+
+On systems where symlinks are unsupported or prohibited, executable linking may be skipped.
+
+## Project Structure
+
+| File | Purpose |
+|---|---|
+| `bin/mnpm.js` | CLI entry point |
+| `src/cli.js` | Command parsing and package.json operations |
+| `src/registry.js` | Registry metadata and tarball requests |
+| `src/semver.js` | Semver range parsing and matching |
+| `src/resolver.js` | Dependency tree resolution and hoisting |
+| `src/installer.js` | Downloads, extraction, pruning, and `.bin` links |
+| `src/lockfile.js` | Lockfile reading and writing |
+| `src/tar.js` | Tarball unpacking |
+| `test/` | Automated test suite |
+
+## Running Tests
+
+```bash
+npm test
+```
+
+The test suite uses Node.js's built-in test runner:
+
+```bash
+node --test test/*.test.js
+```
+
+## Supported Package Specifications
+
+mnpm supports:
+
+- Exact versions
+- Semver ranges
+- npm dist-tags
+- Scoped packages
+- Optional dependencies
+- OS and CPU restrictions
+
+It does not support:
+
+- Git and GitHub URLs
+- `http:` or `https:` package URLs
+- `file:` dependencies
+- `link:` dependencies
+- `workspace:` dependencies
+- `npm:` aliases
+- GitHub shorthand such as `owner/repository`
+- Peer dependencies
+- Lifecycle scripts
+- A tarball cache
+- Publishing packages
+- Windows `.cmd` executable shims
+
+## Known Limitations
+
+- The lockfile is not yet incremental; dependency changes trigger a full resolution.
+- Peer dependencies are ignored.
+- No cache is maintained for downloaded tarballs.
+- Git and local package specifications are rejected.
+- Packages that require install scripts may not work.
+- Windows executable shims are not yet generated.
+
+## Suggested Experiments
+
+- Install Express and inspect its dependency tree.
+- Compare a hoisted package with a nested conflicting version.
+- Inspect the contents of `mnpm-lock.json`.
+- Modify a tarball integrity hash and observe the verification failure.
+- Add support for a package cache.
+- Add peer dependency handling.
+- Implement `mnpm outdated` or `mnpm audit`.
+- Add support for Verdaccio and `mnpm publish`.
+
+## License
+
+This project is licensed under the ISC license.
